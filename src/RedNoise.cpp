@@ -220,6 +220,43 @@ void textureMapper(CanvasTriangle triangle, Colour colour, DrawingWindow &window
 }
 
 
+std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
+  // object file patch
+	std::ifstream objFile(objFilepath);
+	std::string objLine;
+  // declaring variables for v and f
+	std::vector<glm::vec3> vertices;
+	std::vector<ModelTriangle> triangles;
+
+	int r = 255;
+	int g = 255;
+	int b = 255;
+
+	Colour colour(r,g,b);
+
+  // loop to parse obj file
+	while (getline(objFile, objLine)) {
+	
+		std::vector<std::string> token = split(objLine, ' ');
+
+	  // checking for v and pushing values into vertices
+		if (token[0] == "v") {
+
+			vertices.push_back(glm::vec3((stof(token[1]))*scale , (stof(token[2]))*scale, (stof(token[3]))*scale ));
+
+		}
+		// checking for line starting with f and pushing values triangles 
+		if (token[0] == "f") {
+
+			triangles.push_back(ModelTriangle( vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], colour));
+ 
+    }
+	}
+
+	objFile.close();
+	return triangles;
+}
+
 void keyPressU (DrawingWindow &window) {
 	CanvasPoint ver0 = CanvasPoint(rand()%256, rand()%256); // making random value for each vertice point
 	CanvasPoint ver1 = CanvasPoint(rand()%256, rand()%256);
@@ -248,34 +285,14 @@ void keyPressF (DrawingWindow &window) {
 	fillMapper(allV, colour, window);
 }
 
-
-
-void loadObj (std::string filepath, float scale) {
-	std::ifstream file(filepath, std::ifstream::in);
-	std::string line;
-	
-	std::vector<glm::vec3> vertices;
-
-	std::vector<TexturePoint> texturePoints;
-
-	while (!file.eof()) {
-		std::getline(file, line);
-		std::vector<std::string> tokens = split(line, ' ');
-
-		std::cout << line;
-		if (line.substr(0,2) == "v ") {
-			std::istringstream s(line.substr(2));
-      glm::vec3 v; s >> v.x; s >> v.y; s >> v.z;
-
-			vertices.push_back(v);
-		}
-		else if (line.substr(0,2) == "f ") {
-			std::istringstream s(line.substr(2));
-			glm::vec3 f; s >> f.x; s >> f.y; s >> f.z;
-		}
+void keyPressO (DrawingWindow &window) {
+	std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
+	for (int i = 0; i < load.size(); i++) {
+		std::cout << load[i];
 	}
-			
 }
+
+
 
 
 void draw(DrawingWindow &window) {
@@ -306,6 +323,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
 		else if (event.key.keysym.sym == SDLK_u) keyPressU(window);
 		else if (event.key.keysym.sym == SDLK_f) keyPressF(window);
+		else if (event.key.keysym.sym == SDLK_o) keyPressO(window);
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
