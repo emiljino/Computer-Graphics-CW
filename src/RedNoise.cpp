@@ -11,6 +11,7 @@
 #include "../libs/sdw/TextureMap.h"
 #include "../libs/sdw/ModelTriangle.h"
 #include <sstream>
+#include <unordered_map>
 
 
 #define WIDTH 320
@@ -50,9 +51,9 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
 	float yStepSize = yDiff/numberOfSteps;
 
 	for (float i = 0.0; i<numberOfSteps; i++) {
-		float x = from.x + (xStepSize*i);
-		float y = from.y + (yStepSize*i);
-		window.setPixelColour(round(x), round(y), lineColour(colour.red, colour.green, colour.blue));
+		float x = floor(from.x + (xStepSize*i));
+		float y = floor(from.y + (yStepSize*i));
+		window.setPixelColour(x, y, lineColour(colour.red, colour.green, colour.blue));
 	}
 }
 
@@ -73,20 +74,20 @@ void drawTexLine(CanvasPoint from, CanvasPoint to, TexturePoint texFrom, Texture
 	float yTexStepSize = yTexDiff/numberOfSteps;
 
 	for (float i = 0.0; i<numberOfSteps; i++) {
-		float x = from.x + (xStepSize*i);
-		float y = from.y + (yStepSize*i);
+		float x = floor(from.x + (xStepSize*i));
+		float y = floor(from.y + (yStepSize*i));
 
-		float xTex = texFrom.x + (xTexStepSize*i);
-		float yTex = texFrom.y + (yTexStepSize*i);
+		float xTex = floor(texFrom.x + (xTexStepSize*i));
+		float yTex = floor(texFrom.y + (yTexStepSize*i));
 
-		window.setPixelColour(round(x), round(y), texture.pixels[ round(xTex) + round(yTex)*texture.width ]);
+		window.setPixelColour(x, y, texture.pixels[ xTex + yTex*texture.width ]);
 	}
 }
 
 void drawTriangle (CanvasTriangle triangle, Colour colour, DrawingWindow &window) {
 	drawLine(triangle.v0(), triangle.v1(), colour, window); // drawing line from vertice 0 to vertice 1
 	drawLine(triangle.v1(), triangle.v2(), colour, window);
-	drawLine(triangle.v2(), triangle.v0(), colour, window);
+	drawLine(triangle.v0(), triangle.v2(), colour, window);
 
 }
 
@@ -135,6 +136,8 @@ void fillMapper (CanvasTriangle triangle, Colour colour, DrawingWindow &window) 
 	if (triangle.v0().y > triangle.v1().y) std::swap(triangle.v0().y, triangle.v1().y);
 	if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0().y, triangle.v2().y);
 	if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1().y, triangle.v2().y);
+
+	if (triangle.v1().x > triangle.v2().x) std::swap(triangle.v1().x, triangle.v2().x);
   // finding gradient of line from v0 to v2
 	float gradient = ((triangle.v2().y - triangle.v0().y) / (triangle.v2().x - triangle.v0().x));
 	// finding value of x on line v0 to v2
@@ -143,7 +146,7 @@ void fillMapper (CanvasTriangle triangle, Colour colour, DrawingWindow &window) 
 	CanvasPoint midPoint(midX, triangle.v1().y);
   // splitting triangle into two by using new x point
 	CanvasTriangle topTriangle(triangle.v0(), midPoint, triangle.v1());
-	CanvasTriangle bottomTriangle(midPoint, triangle.v1(),  triangle.v2());
+	CanvasTriangle bottomTriangle(triangle.v1(), midPoint, triangle.v2());
 	
 	// fill in top triangle area
 	drawTriangle(topTriangle, colour, window);
@@ -174,6 +177,8 @@ void textureMapper(CanvasTriangle triangle, Colour colour, DrawingWindow &window
 	if (triangle.v0().y > triangle.v1().y) std::swap(triangle.v0().y, triangle.v1().y);
 	if (triangle.v0().y > triangle.v2().y) std::swap(triangle.v0().y, triangle.v2().y);
 	if (triangle.v1().y > triangle.v2().y) std::swap(triangle.v1().y, triangle.v2().y);
+
+	if (triangle.v1().x > triangle.v2().x) std::swap(triangle.v1().x, triangle.v2().x);
   // finding gradient of line from v0 to v2
 	float gradient = ((triangle.v2().y - triangle.v0().y) / (triangle.v2().x - triangle.v0().x));
   // finding value of x on line v0 to v2
@@ -219,43 +224,180 @@ void textureMapper(CanvasTriangle triangle, Colour colour, DrawingWindow &window
 
 }
 
-
-std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
+/* std::unordered_map<std::string, Colour> loadMtl(std::string mtlFilepath) {
   // object file patch
+	std::ifstream mtlFile(mtlFilepath);
+	std::string mtlLine;
+  // declaring hashmap of colours
+	std::unordered_map<std::string, Colour> colours;
+	std::string colour_name;
+
+
+  // loop to parse mtl file
+	while (getline(mtlFile, mtlLine)) {
+	
+		std::vector<std::string> token = split(mtlLine, ' ');
+
+	  // checking for newmtl 
+		if (token[0] == "newmtl") {
+			colour_name = token[1];
+		}
+		if (token[0] == "Kd") {
+			int r = 255 * stof(token[1]);
+			int g = 255 * stof(token[2]);
+			int b = 255 * stof(token[3]);
+
+			colours[colour_name] = Colour(colour_name, r, g, b);
+		}
+  }
+	mtlFile.close();
+	return colours;
+}
+
+*/
+
+
+
+std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string objFilepath, float scale) {
+  // material file path
+	std::ifstream mtlFile(mtlFilepath);
+	std::string mtlLine;
+  // object file path
 	std::ifstream objFile(objFilepath);
 	std::string objLine;
   // declaring variables for v and f
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> triangles;
+	
+	std::unordered_map<std::string, Colour> colours;
+	std::string colour_name;
+	
+	while (getline(mtlFile, mtlLine)) {
+	
+		std::vector<std::string> token = split(mtlLine, ' ');
 
-	int r = 255;
-	int g = 255;
-	int b = 255;
+	  // checking for newmtl 
+		if (token[0] == "newmtl") {
+			std::string colour_name = token[1];
 
-	Colour colour(r,g,b);
+			getline(mtlFile, mtlLine);
+			std::vector<std::string> token = split(mtlLine, ' ');
+		
+			int r = 255 * stof(token[1]);
+			int g = 255 * stof(token[2]);
+			int b = 255 * stof(token[3]);
 
+			colours[colour_name] = Colour(colour_name, r, g, b);
+		}
+  }
+	mtlFile.close();
+	
+	
   // loop to parse obj file
 	while (getline(objFile, objLine)) {
-	
+
 		std::vector<std::string> token = split(objLine, ' ');
-
-	  // checking for v and pushing values into vertices
+	  
+		// checking for colour value of obj file
+		if (token[0] == "usemtl") {
+			colour_name = token[1];
+		}
+		// checking for v and pushing values into vertices
 		if (token[0] == "v") {
-
-			vertices.push_back(glm::vec3((stof(token[1]))*scale , (stof(token[2]))*scale, (stof(token[3]))*scale ));
-
+			vertices.push_back(glm::vec3((stof(token[1]))*scale , (stof(token[2]))*scale, (stof(token[3]))*scale));
 		}
 		// checking for line starting with f and pushing values triangles 
 		if (token[0] == "f") {
-
-			triangles.push_back(ModelTriangle( vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], colour));
- 
+			triangles.push_back(ModelTriangle( vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], colours[colour_name]));
     }
 	}
 
 	objFile.close();
 	return triangles;
 }
+
+
+
+CanvasPoint getCanvasIntersectionPoint (glm::vec3 cameraPosition, glm::vec3 vertexPosition, float focalLength) {
+
+glm::vec3 camToVertex = vertexPosition - cameraPosition;
+
+float u = (-180 * (focalLength * (camToVertex.x)/(camToVertex.z))) + (WIDTH/2);
+float v = (180 * (focalLength * (camToVertex.y)/(camToVertex.z))) + (HEIGHT/2);
+
+
+return CanvasPoint (u ,v);
+}
+
+
+void pointCloudRender (std::vector<ModelTriangle> triangles, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window ) {
+
+int r = 255;
+int g = 255;
+int b = 255;
+
+uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
+
+for (int i = 0; i < triangles.size(); i++) {
+
+	CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[0], focalLength);
+	CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[1], focalLength);
+	CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[2], focalLength);
+
+	if ((v0.x >= 0 && v0.x < WIDTH) && (v0.y >= 0 && v0.y < HEIGHT)) {
+		window.setPixelColour(v0.x, v0.y, colour);
+	}
+
+	if ((v1.x >= 0 && v1.x < WIDTH) && (v1.y >= 0 && v1.y < HEIGHT)) {
+		window.setPixelColour(v1.x, v1.y, colour);
+	}
+
+	if ((v2.x >= 0 && v2.x < WIDTH) && (v2.y >= 0 && v2.y < HEIGHT)) {
+		window.setPixelColour(v2.x, v2.y, colour);
+	}
+}
+}
+
+void wireFrameRender (std::vector<ModelTriangle> triangles, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window) {
+
+  int r = 255;
+  int g = 255;
+  int b = 255;
+
+  Colour triangleColour(r,g,b);
+
+	for (int i = 0; i < triangles.size(); i++) {
+
+	CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[0], focalLength);
+	CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[1], focalLength);
+	CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[2], focalLength);
+
+	CanvasTriangle triangle(v0, v1, v2);
+
+	drawTriangle(triangle, triangleColour, window);
+	}
+}
+
+void rasterizeRender (std::vector<ModelTriangle> triangles, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window) {
+
+	for (int i = 0; i < triangles.size(); i++) {
+
+	CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[0], focalLength);
+	CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[1], focalLength);
+	CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangles[i].vertices[2], focalLength);
+
+	CanvasTriangle triangle(v0, v1, v2);
+
+	int r = triangles[i].colour.red;
+  int g = triangles[i].colour.green;
+  int b = triangles[i].colour.blue;
+
+	Colour colour(r,g,b);
+
+	fillMapper(triangle, colour, window);
+	}
+}
+
 
 void keyPressU (DrawingWindow &window) {
 	CanvasPoint ver0 = CanvasPoint(rand()%256, rand()%256); // making random value for each vertice point
@@ -286,13 +428,11 @@ void keyPressF (DrawingWindow &window) {
 }
 
 void keyPressO (DrawingWindow &window) {
-	std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
+	std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl", "cornell-box.obj", 0.35);
 	for (int i = 0; i < load.size(); i++) {
 		std::cout << load[i];
 	}
 }
-
-
 
 
 void draw(DrawingWindow &window) {
@@ -373,18 +513,25 @@ v2.texturePoint.y = 330;
 
 CanvasTriangle triangle(v0,v1,v2);
 
-Colour colour;
+std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl", "cornell-box.obj", 0.35);
+glm::vec3 cameraPosition(0.0, 0.0, 4.0);
+float focalLength = 2.0;
+
+ Colour colour;
 colour.red = 255;
 colour.green = 255;
 colour.blue = 255;
+
 	
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
 		//draw(window);
 		//fillMapper(triangle, colour, window);
-		textureMapper(triangle, colour, window);
+		//textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
+    //wireFrameRender(load, cameraPosition, focalLength, window);
+		rasterizeRender(load, cameraPosition, focalLength, window);
 		// Need to render the frame at the end, or nothing actually gets shown on the screen !
 		window.renderFrame();
 	}	
