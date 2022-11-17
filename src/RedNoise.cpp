@@ -21,7 +21,18 @@
 #define HEIGHT 240
 
 std::vector<std::vector<float> > depthBuffer;
-glm::vec3 cameraPosition(0.0, 0.0, 4.0);
+glm::vec3 camPosition(0.0, 0.0, 4.0);
+glm::mat3 camRotation = glm::mat3(
+				1.0, 0.0, 0.0, // first column (not row!)
+				0.0, 1.0, 0.0, // second column
+				0.0, 0.0, 1.0 // third column
+			);
+			
+glm::mat3 camOrientation = glm::mat3(
+				1.0, 0.0, 0.0, // first column (not row!)
+				0.0, 1.0, 0.0, // second column
+				0.0, 0.0, 1.0 // third column
+			);
 float focalLength = 2.0;
 
 
@@ -51,6 +62,8 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
 */
 
 
+
+
 void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &window) {
 	float xDiff = to.x - from.x; // distance from start to end
 	float yDiff = to.y - from.y;
@@ -70,11 +83,11 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
 		float zDepth = from.depth + (depthStepSize * i);
     //std::cout << zDepth;
     // if inverse of depth is bigger than buffer, add it to buffer
-		if (-1 / zDepth >= depthBuffer[x][y]) {
+		if ((-1 / zDepth) >= depthBuffer[x][y]) {
 
 			//std::cout << zDepth << std::endl;
       window.setPixelColour(int(x), int(y), c);
-			depthBuffer[int(x)][int(y)] = -1 / zDepth;
+			depthBuffer[int(x)][int(y)] = (-1 / zDepth);
 		}
 	//	window.setPixelColour(int(x), int(y), c);
 	}
@@ -371,18 +384,19 @@ std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string o
 
 
 
-CanvasPoint getCanvasIntersectionPoint (glm::vec3 cameraPosition, glm::vec3 vertexPosition, float focalLength) {
+CanvasPoint getCanvasIntersectionPoint (glm::vec3 camPosition, glm::vec3 vertexPosition, float focalLength) {
 
-glm::vec3 camToVertex = (vertexPosition - cameraPosition);
+glm::vec3 camToVertex = (vertexPosition - camPosition);
+glm::vec3 adjustedVertex = camToVertex * camOrientation;
 
-float u = (-180 * (focalLength * (camToVertex.x)/(camToVertex.z))) + (WIDTH/2);
-float v = (180 * (focalLength * (camToVertex.y)/(camToVertex.z))) + (HEIGHT/2);
+float u = (-180 * (focalLength * (adjustedVertex.x)/(adjustedVertex.z))) + (WIDTH/2);
+float v = (180 * (focalLength * (adjustedVertex.y)/(adjustedVertex.z))) + (HEIGHT/2);
 
-return CanvasPoint (u , v, camToVertex.z);
+return CanvasPoint (u , v, adjustedVertex.z);
 }
 
 
-void pointCloudRender (std::vector<ModelTriangle> triangle, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window ) {
+void pointCloudRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition, float focalLength, DrawingWindow &window ) {
 
 int r = 255;
 int g = 255;
@@ -392,9 +406,9 @@ uint32_t colour = (255 << 24) + (int(r) << 16) + (int(g) << 8) + int(b);
 
 for (float i = 0; i < triangle.size(); i++) {
 
-	CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[0], focalLength);
-	CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[1], focalLength);
-	CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[2], focalLength);
+	CanvasPoint v0 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[0], focalLength);
+	CanvasPoint v1 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[1], focalLength);
+	CanvasPoint v2 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[2], focalLength);
 
 	if ((v0.x >= 0 && v0.x < WIDTH) && (v0.y >= 0 && v0.y < HEIGHT)) {
 		window.setPixelColour(v0.x, v0.y, colour);
@@ -410,7 +424,10 @@ for (float i = 0; i < triangle.size(); i++) {
 }
 }
 
-void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window) {
+void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition, float focalLength, DrawingWindow &window) {
+
+	//window.clearPixels();
+
 
   int r = 255;
   int g = 255;
@@ -420,9 +437,9 @@ void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 cameraPosit
 
 	for (float i = 0; i < triangle.size(); i++) {
 
-	CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[0], focalLength);
-	CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[1], focalLength);
-	CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[2], focalLength);
+	CanvasPoint v0 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[0], focalLength);
+	CanvasPoint v1 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[1], focalLength);
+	CanvasPoint v2 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[2], focalLength);
 
 	CanvasTriangle t(v0, v1, v2);
 
@@ -431,12 +448,14 @@ void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 cameraPosit
 }
 
 
-void rasterizeRender (std::vector<ModelTriangle> triangle, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window) {
+void rasterizeRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition, float focalLength, DrawingWindow &window) {
+
+	//window.clearPixels();
 
 	for (float i = 0; i < triangle.size(); i++) {
-		CanvasPoint v0 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[0], focalLength);
-	  CanvasPoint v1 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[1], focalLength);
-	  CanvasPoint v2 = getCanvasIntersectionPoint(cameraPosition, triangle[i].vertices[2], focalLength);
+		CanvasPoint v0 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[0], focalLength);
+	  CanvasPoint v1 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[1], focalLength);
+	  CanvasPoint v2 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[2], focalLength);
 
 	  CanvasTriangle t(v0, v1, v2);
 
@@ -487,64 +506,99 @@ void keyPressO (DrawingWindow &window) {
 	}
 }
 
+
 void draw(DrawingWindow &window) {
-  glm::vec3 topLeft(255, 0, 0); // size of window
+ /* glm::vec3 topLeft(255, 0, 0); // size of window
   glm::vec3 topRight(0, 0, 255);       
   glm::vec3 bottomRight(0, 255, 0);    
   glm::vec3 bottomLeft(255, 255, 0);   
 	
 	std::vector<glm::vec3> left = interpolateThreeElementValues(topLeft, bottomLeft, window.height);
 	std::vector<glm::vec3> right = interpolateThreeElementValues(topRight, bottomRight, window.height);
-
-	window.clearPixels();
-	for (size_t y = 0; y < window.height; y++) {
-		std::vector<glm::vec3> row = interpolateThreeElementValues(left[y], right[y], window.width);
+*/
+window.clearPixels();
+  depthBuffer.resize(WIDTH);
+  for(int x = 0; x < WIDTH; x++) {
+	  depthBuffer[x].resize(HEIGHT);
+	  for(int y = 0; y < HEIGHT; y++) {
+		  depthBuffer[x][y] = 0.0;
+	  }
+  }
+  
+  std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
+	rasterizeRender(load, camPosition, focalLength, window);
+	/*for (size_t y = 0; y < window.height; y++) {
+		//std::vector<glm::vec3> row = interpolateThreeElementValues(left[y], right[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
+			float red = rand()%256;
+			float green = 0;
+			float blue = 0;
     
-			uint32_t colour = (255 << 24) + (int(row[x].r) << 16) + (int(row[x].g) << 8) + int(row[x].b);
+			uint32_t colour = (255 << 24) + (int(red) << 16) + (int(green) << 8) + int(blue);
 			window.setPixelColour(x, y, colour);
+			
 		}
 	}
+	*/
 }
+
 
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_LEFT) {
-			cameraPosition.x = cameraPosition.x + 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+			camPosition.x = camPosition.x + 0.1;
 		}
 		else if (event.key.keysym.sym == SDLK_RIGHT) {
-			cameraPosition.x = cameraPosition.x - 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+			camPosition.x = camPosition.x - 0.1;
 		}
 		else if (event.key.keysym.sym == SDLK_UP) {
-			cameraPosition.y = cameraPosition.y - 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+			camPosition.y = camPosition.y - 0.1;
 		}
 		else if (event.key.keysym.sym == SDLK_DOWN) {
-			cameraPosition.y = cameraPosition.y + 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+			camPosition.y = camPosition.y + 0.1;
 		}
-		else if (event.key.keysym.sym == SDLK_z) {
-			cameraPosition.z = cameraPosition.z + 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+		else if (event.key.keysym.sym == SDLK_i) {
+			camPosition.z = camPosition.z + 0.1;
 		}
-		else if (event.key.keysym.sym == SDLK_x) {
-			cameraPosition.z = cameraPosition.z - 0.1;
-			std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
-			window.clearPixels();
-			rasterizeRender(load, cameraPosition, focalLength, window);
+		else if (event.key.keysym.sym == SDLK_o) {
+			camPosition.z = camPosition.z - 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_w) {
+			glm::mat3 camRotation = glm::mat3(
+				1.0, 0.0, 0.0, // first column (not row!)
+				0.0, cos(-0.0174533), -sin(-0.0174533), // second column
+				0.0, sin(-0.0174533), cos(-0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			camOrientation = camRotation * camOrientation;
+		}
+		else if (event.key.keysym.sym == SDLK_s) {
+			glm::mat3 camRotation = glm::mat3(
+				1.0, 0.0, 0.0, // first column (not row!)
+				0.0, cos(0.0174533), -sin(0.0174533), // second column
+				0.0, sin(0.0174533), cos(0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			camOrientation = camRotation * camOrientation;
+		}
+		else if (event.key.keysym.sym == SDLK_a) {
+			glm::mat3 camRotation = glm::mat3(
+				cos(-0.0174533), 0.0, sin(-0.0174533), // first column (not row!)
+				0.0, 1.0, 0.0, // second column
+				-sin(-0.0174533), 0.0, cos(-0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			camOrientation = camRotation * camOrientation;
+		}
+		else if (event.key.keysym.sym == SDLK_d) {
+			glm::mat3 camRotation = glm::mat3(
+				cos(0.0174533), 0.0, sin(0.0174533), // first column (not row!)
+				0.0, 1.0, 0.0, // second column
+				-sin(0.0174533), 0.0, cos(0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			camOrientation = camRotation * camOrientation;
 		}
 		else if (event.key.keysym.sym == SDLK_u) keyPressU(window);
 		else if (event.key.keysym.sym == SDLK_f) keyPressF(window);
@@ -582,7 +636,7 @@ int main(int argc, char *argv[]) {
 
 //std::vector<std::vector<float> > depthBuffer = {{0}};
 
-
+/*
 depthBuffer.resize(WIDTH);
 for(int x = 0; x < WIDTH; x++) {
 	depthBuffer[x].resize(HEIGHT);
@@ -590,7 +644,8 @@ for(int x = 0; x < WIDTH; x++) {
 		depthBuffer[x][y] = 0.0;
 	}
 }
-
+window.clearPixels();
+*/
 
 //depthBuffer.resize(WIDTH, float(HEIGHT, 0));
 /*
@@ -638,7 +693,7 @@ colour.blue = 255;
 	    }
     }   
 		*/
-		//draw(window);
+		draw(window);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
