@@ -34,6 +34,7 @@ glm::mat3 camOrientation = glm::mat3(
 				0.0, 0.0, 1.0 // third column
 			);
 float focalLength = 2.0;
+bool orbitMode = false;
 
 
 std::vector<float> interpolateSingleFloats(float from, float to, float numberOfValues) {
@@ -77,11 +78,15 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
 
 	uint32_t c = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 
+
 	for (float i = 0.0; i<numberOfSteps+1; i++) {
 		float x = from.x + (xStepSize * i);
 		float y = from.y + (yStepSize * i);
 		float zDepth = from.depth + (depthStepSize * i);
     //std::cout << zDepth;
+		if (x < 0 || x > WIDTH - 1 || y < 0 || y > HEIGHT - 1) {
+			continue;
+		}
     // if inverse of depth is bigger than buffer, add it to buffer
 		if ((-1 / zDepth) >= depthBuffer[x][y]) {
 
@@ -471,6 +476,26 @@ void rasterizeRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition
 
 
 
+void lookAt(glm::vec3 to){
+	glm::vec3 up(0, 1, 0);
+	glm::vec3 forward = glm::normalize(to - camPosition );
+	glm::vec3 right = glm::normalize(glm::cross(up, -forward));
+	glm::vec3 newUp = glm::normalize(glm::cross(-forward, right));
+	camOrientation = glm::mat3(right, newUp, -forward);
+}
+
+void orbit() {
+	glm::vec3 origin(0.0, 0.0, 0.0);
+	glm::mat3 camRotation = glm::mat3(
+				cos(0.0174533), 0.0, sin(0.0174533), // first column (not row!)
+				0.0, 1.0, 0.0, // second columns
+				-sin(0.0174533), 0.0, cos(0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			lookAt(origin);
+}
+
+
 void keyPressU (DrawingWindow &window) {
 	CanvasPoint ver0 = CanvasPoint(rand()%256, rand()%256); // making random value for each vertice point
 	CanvasPoint ver1 = CanvasPoint(rand()%256, rand()%256);
@@ -507,6 +532,7 @@ void keyPressO (DrawingWindow &window) {
 }
 
 
+
 void draw(DrawingWindow &window) {
  /* glm::vec3 topLeft(255, 0, 0); // size of window
   glm::vec3 topRight(0, 0, 255);       
@@ -524,9 +550,29 @@ window.clearPixels();
 		  depthBuffer[x][y] = 0.0;
 	  }
   }
-  
+
+	if (orbitMode) {
+		orbit();
+	}
+
+  /*
+	glm::mat3 camRotation = glm::mat3(
+				cos(0.0174533), 0.0, sin(0.0174533), // first column (not row!)
+				0.0, 1.0, 0.0, // second column
+				-sin(0.0174533), 0.0, cos(0.0174533) // third coloumn
+			);
+			camPosition = camRotation * camPosition;
+			//camOrientation = camRotation * camOrientation;
+			lookAt(origin);
+			*/
+
   std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
 	rasterizeRender(load, camPosition, focalLength, window);
+
+
+	
+			
+			
 	/*for (size_t y = 0; y < window.height; y++) {
 		//std::vector<glm::vec3> row = interpolateThreeElementValues(left[y], right[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
@@ -558,10 +604,10 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_DOWN) {
 			camPosition.y = camPosition.y + 0.1;
 		}
-		else if (event.key.keysym.sym == SDLK_i) {
+		else if (event.key.keysym.sym == SDLK_z) {
 			camPosition.z = camPosition.z + 0.1;
 		}
-		else if (event.key.keysym.sym == SDLK_o) {
+		else if (event.key.keysym.sym == SDLK_x) {
 			camPosition.z = camPosition.z - 0.1;
 		}
 		else if (event.key.keysym.sym == SDLK_w) {
@@ -599,6 +645,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			);
 			camPosition = camRotation * camPosition;
 			camOrientation = camRotation * camOrientation;
+		}
+		else if (event.key.keysym.sym == SDLK_y) {
+			orbitMode = true;
 		}
 		else if (event.key.keysym.sym == SDLK_u) keyPressU(window);
 		else if (event.key.keysym.sym == SDLK_f) keyPressF(window);
