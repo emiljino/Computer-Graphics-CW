@@ -14,7 +14,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <string>
-
+#include "../libs/sdw//RayTriangleIntersection.h"
 
 
 #define WIDTH 320
@@ -276,7 +276,7 @@ void textureMapper(CanvasTriangle triangle, Colour colour, DrawingWindow &window
 
 	float texTopToMidX = topToMidRatioX * texTopToBotX;
 	float texTopToMidY = topToMidRatioY * texTopToBotY;
-
+  
   // co-ordinates of texture middle point
 	midPoint.texturePoint.x = triangle.vertices[0].texturePoint.x - texTopToMidX;
 	midPoint.texturePoint.y = triangle.vertices[0].texturePoint.y - texTopToMidY;
@@ -339,9 +339,12 @@ std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string o
   // declaring variables for v and f
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> triangles;
+	std::vector<TexturePoint> texturePoints;
 	
 	std::unordered_map<std::string, Colour> colours;
 	std::string colour_name;
+	std::string texture_path;
+	
 	
 	while (getline(mtlFile, mtlLine)) {
 	
@@ -360,6 +363,16 @@ std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string o
 
 			colours[colour_name] = Colour(colour_name, r, g, b);
 		}
+		/*
+		if (token[0] == "map_Kd") {
+			std::string texture_path = token[1];
+
+			getline(mtlFile, mtlLine);
+			std::vector<std::string> token = split(mtlLine, ' ');
+
+			colours[colour_name] = colour_name;
+		}
+		*/
   }
 	mtlFile.close();
 	
@@ -375,12 +388,23 @@ std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string o
 		}
 		// checking for v and pushing values into vertices
 		else if (token[0] == "v") {
-			vertices.push_back(glm::vec3((stof(token[1]))*scale , (stof(token[2]))*scale, (stof(token[3]))*scale));
+			vertices.push_back(glm::vec3((stof(token[1]))*scale, (stof(token[2]))*scale, (stof(token[3]))*scale));
+		}/*
+		else if (token[0] == "vt") {
+			texturePoints.push_back(TexturePoint(stof(token[1]), stof(token[2])));
 		}
+		*/
 		// checking for line starting with f and pushing values triangles 
 		else if (token[0] == "f") {
-			triangles.push_back(ModelTriangle( vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], colours[colour_name]));
+			triangles.push_back(ModelTriangle(vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], colours[colour_name]));
     }
+		/*
+		if (!texturePoints.empty() && token[1] != " ") {
+			triangles.texturePoints[0] = texturePoints[stoi(token[1]) - 1];
+			triangles.texturePoints[1] = texturePoints[stoi(token[2]) - 1];
+			triangles.texturePoints[2] = texturePoints[stoi(token[3]) - 1];
+		}
+		*/
 	}
 
 	objFile.close();
@@ -474,6 +498,34 @@ void rasterizeRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition
 	}
 }
 
+RayTriangleIntersection getClosestIntersection (glm::vec3 camPos, glm::vec3 rayDirection, std::vector<ModelTriangle> triangle) {
+	RayTriangleIntersection result;
+	result.distanceFromCamera = 999999;
+	// finding ray triangle intersection 
+	for (int i = 0; i < triangle.size(); i++) {
+		glm::vec3 e0 = triangle.vertices[1] - triangle.vertices[0];
+    glm::vec3 e1 = triangle.vertices[2] - triangle.vertices[0];
+    glm::vec3 SPVector = camPos - triangle.vertices[0];
+    glm::mat3 DEMatrix(-rayDirection, e0, e1);
+    glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector;
+		// t is absolute distance along ray from cam to intersection pt
+		// u is proportional distance along the triangle's first edge that the intersection pt occurs
+		// v is proportional distance along the triangle's second edge that the intersection pt occurs
+		float t = possibleSolution[0]; 
+		float u = possibleSolution[1]; 
+		float v = possibleSolution[2];
+    // validating the coordinates of any potential intersections before accepting it as a solution
+		// t checks distance from cam to intersection pt is positive so we dont end up rendering triangles behind camera
+		if ((t < result.distanceFromCamera) && (t > 0) && (u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v <= 1.0)) {
+			result.distanceFromCamera = t;
+			result.intersectedTriangle = triangle[i];
+			result.triangleIndex = i;
+			result.intersectionPoint = triangle[i].vertices[0] + u * e0 + v * e1;
+		}
+	}
+	return result;
+}
+
 
 
 void lookAt(glm::vec3 to){
@@ -531,9 +583,12 @@ void keyPressO (DrawingWindow &window) {
 	}
 }
 
-
-
 void draw(DrawingWindow &window) {
+
+
+}
+
+void drawRasterised(DrawingWindow &window) {
  /* glm::vec3 topLeft(255, 0, 0); // size of window
   glm::vec3 topRight(0, 0, 255);       
   glm::vec3 bottomRight(0, 255, 0);    
@@ -542,6 +597,8 @@ void draw(DrawingWindow &window) {
 	std::vector<glm::vec3> left = interpolateThreeElementValues(topLeft, bottomLeft, window.height);
 	std::vector<glm::vec3> right = interpolateThreeElementValues(topRight, bottomRight, window.height);
 */
+
+// clearing frame everytime drawRasterised is called
 window.clearPixels();
   depthBuffer.resize(WIDTH);
   for(int x = 0; x < WIDTH; x++) {
@@ -550,7 +607,7 @@ window.clearPixels();
 		  depthBuffer[x][y] = 0.0;
 	  }
   }
-
+  // when y is pressed orbitMode set to true and orbit func called
 	if (orbitMode) {
 		orbit();
 	}
@@ -565,7 +622,7 @@ window.clearPixels();
 			//camOrientation = camRotation * camOrientation;
 			lookAt(origin);
 			*/
-
+  // load in obj and mtl files and calls rasterizeRender to draw it
   std::vector<ModelTriangle> load = loadObjAndMtl("cornell-box.mtl.obj", "cornell-box.obj", 0.35);
 	rasterizeRender(load, camPosition, focalLength, window);
 
@@ -742,7 +799,7 @@ colour.blue = 255;
 	    }
     }   
 		*/
-		draw(window);
+		drawRasterised(window);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
