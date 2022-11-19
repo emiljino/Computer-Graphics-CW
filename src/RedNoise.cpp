@@ -486,7 +486,14 @@ for (float i = 0; i < triangle.size(); i++) {
 }
 
 void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition, float focalLength, DrawingWindow &window) {
-	//window.clearPixels();
+	window.clearPixels();
+	depthBuffer.resize(WIDTH);
+  for(int x = 0; x < WIDTH; x++) {
+	  depthBuffer[x].resize(HEIGHT);
+	  for(int y = 0; y < HEIGHT; y++) {
+		  depthBuffer[x][y] = 0.0;
+	  }
+  }
   int r = 255;
   int g = 255;
   int b = 255;
@@ -508,7 +515,14 @@ void wireFrameRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition
 
 void rasterizeRender (std::vector<ModelTriangle> triangle, glm::vec3 camPosition, float focalLength, DrawingWindow &window) {
 
-	//window.clearPixels();
+	window.clearPixels();
+	depthBuffer.resize(WIDTH);
+  for(int x = 0; x < WIDTH; x++) {
+	  depthBuffer[x].resize(HEIGHT);
+	  for(int y = 0; y < HEIGHT; y++) {
+		  depthBuffer[x][y] = 0.0;
+	  }
+  }
 
 	for (float i = 0; i < triangle.size(); i++) {
 		CanvasPoint v0 = getCanvasIntersectionPoint(camPosition, triangle[i].vertices[0], focalLength);
@@ -639,7 +653,8 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 			glm::vec3 imagePoint(u, v, z);
       glm::vec3 rayDirection = glm::normalize(imagePoint);
 			RayTriangleIntersection result = getClosestIntersection(camPosition, rayDirection, triangle);
-
+      
+			// finding where shadows are based of lightsource hitting boxes
       glm::vec3 shadowRay = lightSource - result.intersectionPoint;
 			glm::vec3 shadowRayDir = glm::normalize(shadowRay);
 			RayTriangleIntersection shadowResult = getClosestShadowIntersection(result.intersectionPoint, shadowRayDir, triangle, result.triangleIndex);
@@ -649,13 +664,12 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 			float green = result.intersectedTriangle.colour.green;
 			float blue = result.intersectedTriangle.colour.blue;
 
-			if (shadowResult.distanceFromCamera < glm::length(shadowRayDir)) {
+			if (shadowResult.distanceFromCamera < glm::length(shadowRay)) {
 				window.setPixelColour(i,j,lineColour(0, 0, 0));
 			}
 			else {
 				window.setPixelColour(i,j,lineColour(red, green, blue));
 			}
-			
 		  }
 	  }
 }
@@ -796,12 +810,47 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			camPosition = camRotation * camPosition;
 			camOrientation = camRotation * camOrientation;
 		}
-		else if (event.key.keysym.sym == SDLK_y) {
+		else if (event.key.keysym.sym == SDLK_q) {
 			orbitMode = !orbitMode;
 		}
 		else if (event.key.keysym.sym == SDLK_u) keyPressU(window);
 		else if (event.key.keysym.sym == SDLK_f) keyPressF(window);
 		else if (event.key.keysym.sym == SDLK_o) keyPressO(window);
+		else if (event.key.keysym.sym == SDLK_r) {
+			window.clearPixels();
+			depthBuffer.resize(WIDTH);
+      for(float x = 0.0; x < WIDTH; x++) {
+	      depthBuffer[x].resize(HEIGHT);
+	      for(float y = 0.0; y < HEIGHT; y++) {
+		      depthBuffer[x][y] = 0.0;
+	      }
+      }   
+			drawRasterised(window);
+		}
+		else if (event.key.keysym.sym == SDLK_t) {
+			window.clearPixels();
+			depthBuffer.resize(WIDTH);
+      for(float x = 0.0; x < WIDTH; x++) {
+	      depthBuffer[x].resize(HEIGHT);
+	      for(float y = 0.0; y < HEIGHT; y++) {
+		      depthBuffer[x][y] = 0.0;
+	      }
+      }   
+			std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
+			drawRayTrace(window, load);
+		}
+		else if (event.key.keysym.sym == SDLK_y) {
+			window.clearPixels();
+			depthBuffer.resize(WIDTH);
+      for(float x = 0.0; x < WIDTH; x++) {
+	      depthBuffer[x].resize(HEIGHT);
+	      for(float y = 0.0; y < HEIGHT; y++) {
+		      depthBuffer[x][y] = 0.0;
+	      }
+      }   
+			std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
+			wireFrameRender(load, camPosition, focalLength, window);
+		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
@@ -891,11 +940,8 @@ colour.blue = 255;
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		
-		
-		
 		//drawRasterised(window);
-		drawRayTrace(window, load);
+		//drawRayTrace(window, load);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
