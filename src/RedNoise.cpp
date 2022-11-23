@@ -19,6 +19,8 @@
 
 #define WIDTH 320
 #define HEIGHT 240
+#define pi 3.14159265358979323846
+//#define LIGHT 10
 
 std::vector<std::vector<float> > depthBuffer;
 glm::vec3 camPosition(0.0, 0.0, 4.0);
@@ -36,6 +38,7 @@ glm::mat3 camOrientation = glm::mat3(
 			);
 float focalLength = 2.0;
 bool orbitMode = false;
+
 
 
 std::vector<float> interpolateSingleFloats(float from, float to, float numberOfValues) {
@@ -652,22 +655,49 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 
 			glm::vec3 imagePoint(u, v, z);
       glm::vec3 rayDirection = glm::normalize(imagePoint);
+			glm::vec3 camDir(imagePoint - camPosition);
 			RayTriangleIntersection result = getClosestIntersection(camPosition, rayDirection, triangle);
       
 			// finding where shadows are based of lightsource hitting boxes
       glm::vec3 shadowRay = lightSource - result.intersectionPoint;
+			// normalized so has direction but magnitude is 1
 			glm::vec3 shadowRayDir = glm::normalize(shadowRay);
 			RayTriangleIntersection shadowResult = getClosestShadowIntersection(result.intersectionPoint, shadowRayDir, triangle, result.triangleIndex);
+			
+			// angle of incidence
+			float AOI = glm::dot(shadowRayDir, glm::normalize(result.intersectedTriangle.normal));
+			glm::vec3 normalAOI(2 * result.intersectedTriangle.normal.x * AOI, 2 * result.intersectedTriangle.normal.y * AOI, 2 * result.intersectedTriangle.normal.z * AOI);
+			// vector of reflection
+			glm::vec3 Rr = -shadowRayDir + normalAOI;
+			float specular = glm::dot(glm::normalize(Rr), glm::normalize(-camDir));
 
       // colours of intersecting points
-			float red = result.intersectedTriangle.colour.red;
-			float green = result.intersectedTriangle.colour.green;
-			float blue = result.intersectedTriangle.colour.blue;
+			float red = result.intersectedTriangle.colour.red * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
+			float green = result.intersectedTriangle.colour.green * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
+			float blue = result.intersectedTriangle.colour.blue * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
 
 			if (shadowResult.distanceFromCamera < glm::length(shadowRay)) {
+				if (red > 255) {
+						red = 255;
+					}
+					if (green > 255) {
+						green = 255;
+					}
+					if (blue > 255) {
+						blue = 255;
+					}
 				window.setPixelColour(i,j,lineColour(0, 0, 0));
 			}
 			else {
+				if (red > 255) {
+						red = 255;
+					}
+					if (green > 255) {
+						green = 255;
+					}
+					if (blue > 255) {
+						blue = 255;
+					}
 				window.setPixelColour(i,j,lineColour(red, green, blue));
 			}
 		  }
@@ -689,6 +719,7 @@ void drawRasterised(DrawingWindow &window) {
 */
 
 // resetting depth buffer everytime drawRasterised is called
+
   depthBuffer.resize(WIDTH);
   for(int x = 0; x < WIDTH; x++) {
 	  depthBuffer[x].resize(HEIGHT);
@@ -696,6 +727,7 @@ void drawRasterised(DrawingWindow &window) {
 		  depthBuffer[x][y] = 0.0;
 	  }
   }
+
   // when y is pressed orbitMode set to true and orbit func called
 	if (orbitMode) {
 		orbit();
@@ -824,7 +856,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 	      for(float y = 0.0; y < HEIGHT; y++) {
 		      depthBuffer[x][y] = 0.0;
 	      }
-      }   
+      }  
 			drawRasterised(window);
 		}
 		else if (event.key.keysym.sym == SDLK_t) {
@@ -850,6 +882,18 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
       }   
 			std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
 			wireFrameRender(load, camPosition, focalLength, window);
+		}
+		else if (event.key.keysym.sym == SDLK_g) {
+			lightSource.x = lightSource.x - 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_h) {
+			lightSource.x = lightSource.x + 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_j) {
+			lightSource.z = lightSource.z + 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_k) {
+			lightSource.z = lightSource.z - 0.1;
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -941,7 +985,7 @@ colour.blue = 255;
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
 		//drawRasterised(window);
-		//drawRayTrace(window, load);
+		drawRayTrace(window, load);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
