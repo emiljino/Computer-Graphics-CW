@@ -362,6 +362,7 @@ std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
   // declaring variables for v and f
 	std::vector<glm::vec3> vertices;
 	std::vector<ModelTriangle> triangles;
+	std::vector<TexturePoint> texture_points;
 	std::string colour_name;
 	
   // loop to parse obj file
@@ -376,9 +377,19 @@ std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
 		if (token[0] == "v") {
 			vertices.push_back(glm::vec3((stof(token[1]))*scale, (stof(token[2]))*scale, (stof(token[3]))*scale));
 		}
+		if (token[0] == "vt") {
+			texture_points.push_back(TexturePoint(stof(token[1]), stof(token[2])));
+		}
 		// checking for line starting with f and pushing values triangles 
 		else if (token[0] == "f") {
-			triangles.push_back(ModelTriangle(vertices[stoi(token[1]) - 1], vertices[stoi(token[2]) - 1], vertices[stoi(token[3]) - 1], materials[colour_name]));
+			std::vector<std::string> l1 = split(token[1], '/');
+			std::vector<std::string> l2 = split(token[2], '/');
+			std::vector<std::string> l3 = split(token[3], '/');
+
+			ModelTriangle triangle(vertices[stoi(l1[0]) - 1], vertices[stoi(l2[0]) - 1], vertices[stoi(l3[0]) - 1], materials[colour_name]);
+			triangle.normal = glm::cross(glm::vec3(vertices[stoi(l2[0]) - 1] - vertices[stoi(l1[0]) - 1]), glm::vec3(vertices[stoi(l3[0]) - 1] - vertices[stoi(l1[0]) - 1]));
+
+			triangles.push_back(triangle);
     }
 	}
 	objFile.close();
@@ -594,7 +605,7 @@ RayTriangleIntersection getClosestShadowIntersection (glm::vec3 camPosition, glm
 		float v = possibleSolution[2];
     // validating the coordinates of any potential intersections before accepting it as a solution
 		// t checks distance from cam to intersection pt is positive so we dont end up rendering triangles behind camera
-		if ((t < result.distanceFromCamera) && (t > 0) && (u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v <= 1.0) && (i != triangleIndex) /*&& (t < distance)*/) {
+		if ((t < result.distanceFromCamera) && (t > 0) && (u >= 0.0) && (u <= 1.0) && (v >= 0.0) && (v <= 1.0) && (u + v <= 1.0) && (i != triangleIndex)) {
 			result.distanceFromCamera = t;
 			result.intersectedTriangle = triangle[i];
 			result.triangleIndex = i;
@@ -655,7 +666,6 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 
 			glm::vec3 imagePoint(u, v, z);
       glm::vec3 rayDirection = glm::normalize(imagePoint);
-			glm::vec3 camDir(imagePoint - camPosition);
 			RayTriangleIntersection result = getClosestIntersection(camPosition, rayDirection, triangle);
       
 			// finding where shadows are based of lightsource hitting boxes
@@ -663,21 +673,27 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 			// normalized so has direction but magnitude is 1
 			glm::vec3 shadowRayDir = glm::normalize(shadowRay);
 			RayTriangleIntersection shadowResult = getClosestShadowIntersection(result.intersectionPoint, shadowRayDir, triangle, result.triangleIndex);
-			
-			// angle of incidence
-			float AOI = glm::dot(shadowRayDir, glm::normalize(result.intersectedTriangle.normal));
-			glm::vec3 normalAOI(2 * result.intersectedTriangle.normal.x * AOI, 2 * result.intersectedTriangle.normal.y * AOI, 2 * result.intersectedTriangle.normal.z * AOI);
+			glm::vec3 camDir = glm::normalize(camPosition - result.intersectionPoint);
+			glm::vec3 normal = result.intersectedTriangle.normal;
+			// proximity lighting
+			float proximity = (5 / (2 * pi * pow(glm::length(shadowRay), 2)));
+			// angle of incidences
+			float AOI = glm::clamp(glm::dot(shadowRayDir, normal), 0.0f, 1.0f);
+		  glm::vec3 normalAOI(2 * normal.x * AOI, 2 * normal.y * AOI, 2 * normal.z * AOI);
 			// vector of reflection
-			glm::vec3 Rr = -shadowRayDir + normalAOI;
-			float specular = glm::dot(glm::normalize(Rr), glm::normalize(-camDir));
+			glm::vec3 Rr = shadowRayDir - normalAOI;
+			float specular = glm::dot(glm::normalize(Rr), glm::normalize(camDir));
+		  float spec = glm::pow(specular, 0);
+			// std::cout << specular;
+			// std::cout << AOI;
 
       // colours of intersecting points
-			float red = result.intersectedTriangle.colour.red * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
-			float green = result.intersectedTriangle.colour.green * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
-			float blue = result.intersectedTriangle.colour.blue * (5 / (2 * pi * pow(glm::length(shadowRay), 2))) * pow(specular, 0) * pow(AOI, 0);
+			float red = glm::clamp((result.intersectedTriangle.colour.red * proximity * AOI * spec), 0.0f, 255.0f);
+			float green = glm::clamp((result.intersectedTriangle.colour.green * proximity * AOI * spec), 0.0f, 255.0f);
+			float blue = glm::clamp((result.intersectedTriangle.colour.blue * proximity * AOI * spec), 0.0f, 255.0f);
 
 			if (shadowResult.distanceFromCamera < glm::length(shadowRay)) {
-				if (red > 255) {
+				/*if (red > 255) {
 						red = 255;
 					}
 					if (green > 255) {
@@ -686,10 +702,11 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 					if (blue > 255) {
 						blue = 255;
 					}
+					*/
 				window.setPixelColour(i,j,lineColour(0, 0, 0));
 			}
 			else {
-				if (red > 255) {
+				/* if (red > 255) {
 						red = 255;
 					}
 					if (green > 255) {
@@ -697,11 +714,11 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 					}
 					if (blue > 255) {
 						blue = 255;
-					}
+					}*/
 				window.setPixelColour(i,j,lineColour(red, green, blue));
 			}
-		  }
-	  }
+		}
+	}
 }
 
 
@@ -894,6 +911,12 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		}
 		else if (event.key.keysym.sym == SDLK_k) {
 			lightSource.z = lightSource.z - 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_n) {
+			lightSource.y = lightSource.y - 0.1;
+		}
+		else if (event.key.keysym.sym == SDLK_m) {
+			lightSource.y = lightSource.y + 0.1;
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
