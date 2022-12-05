@@ -20,6 +20,8 @@
 #define WIDTH 320
 #define HEIGHT 240
 #define pi 3.14159265358979323846
+enum RenderMode{ WIREFRAME, RASTERIZED, RAYTRACE};
+RenderMode renderMode = RASTERIZED;
 //#define LIGHT 10
 
 std::vector<std::vector<float> > depthBuffer;
@@ -334,6 +336,7 @@ std::unordered_map<std::string, Colour> loadMtl (std::string mtlFilepath) {
 	std::string mtlLine;
 	std::unordered_map<std::string, Colour> materials;
 	std::string colour_name;
+	std::string texturePath;
 
 
 	while (getline(mtlFile, mtlLine)) {
@@ -347,7 +350,12 @@ std::unordered_map<std::string, Colour> loadMtl (std::string mtlFilepath) {
 		if (token[0] == "Kd") {
 			Colour colourVal(std::stof(token[1])*255, std::stof(token[2]) * 255, std::stof(token[3]) * 255);
 			materials[colour_name] = colourVal;
-    }
+    } 
+		if (token[0] == "map_Kd") {
+			Colour colourMap = materials[colour_name];
+			colourMap.name = token[1];
+			materials[colour_name] = colourMap;
+		}
   }
 	mtlFile.close();
 	return materials;
@@ -355,7 +363,7 @@ std::unordered_map<std::string, Colour> loadMtl (std::string mtlFilepath) {
 
 
 std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
-	std::unordered_map<std::string, Colour> materials = loadMtl("cornell-box.mtl.obj");
+	std::unordered_map<std::string, Colour> materials = loadMtl("textured-cornell-box.mtl.obj");
   // object file path
 	std::ifstream objFile(objFilepath);
 	std::string objLine;
@@ -387,6 +395,59 @@ std::vector<ModelTriangle> loadObj (std::string objFilepath, float scale) {
 			std::vector<std::string> l3 = split(token[3], '/');
 
 			ModelTriangle triangle(vertices[stoi(l1[0]) - 1], vertices[stoi(l2[0]) - 1], vertices[stoi(l3[0]) - 1], materials[colour_name]);
+			triangle.normal = glm::cross(glm::vec3(vertices[stoi(l2[0]) - 1] - vertices[stoi(l1[0]) - 1]), glm::vec3(vertices[stoi(l3[0]) - 1] - vertices[stoi(l1[0]) - 1]));
+
+      if(!texture_points.empty() && l1[1] != "") {
+				triangle.texturePoints[0] = texture_points[stoi(l1[1]) - 1];
+			  triangle.texturePoints[1] = texture_points[stoi(l2[1]) - 1];
+			  triangle.texturePoints[2] = texture_points[stoi(l3[1]) - 1];
+			}
+			// std::cout << triangle.texturePoints[0];
+			// std::cout << triangle.texturePoints[1];
+			// std::cout << triangle.texturePoints[2];
+
+			triangles.push_back(triangle);
+    }
+	}
+	objFile.close();
+	return triangles;
+}
+
+
+std::vector<ModelTriangle> loadSphereObj (std::string objFilepath, float scale) {
+	//std::unordered_map<std::string, Colour> materials = loadMtl("cornell-box.mtl.obj");
+  // object file path
+	std::ifstream objFile(objFilepath);
+	std::string objLine;
+  // declaring variables for v and f
+	std::vector<glm::vec3> vertices;
+	std::vector<ModelTriangle> triangles;
+	//std::vector<TexturePoint> texture_points;
+	//std::string colour_name;
+	
+  // loop to parse obj file
+	while (getline(objFile, objLine)) {
+
+		std::vector<std::string> token = split(objLine, ' ');
+		// checking for colour value of obj file
+		/* if (token[0] == "usemtl") {
+			colour_name = token[1];
+		} */
+		// checking for v and pushing values into vertices
+		if (token[0] == "v") {
+			vertices.push_back(glm::vec3((stof(token[1]))*scale, (stof(token[2]))*scale, (stof(token[3]))*scale));
+		}
+		/* if (token[0] == "vt") {
+			texture_points.push_back(TexturePoint(stof(token[1]), stof(token[2])));
+		} */
+		// checking for line starting with f and pushing values triangles 
+		else if (token[0] == "f") {
+			std::vector<std::string> l1 = split(token[1], '/');
+			std::vector<std::string> l2 = split(token[2], '/');
+			std::vector<std::string> l3 = split(token[3], '/');
+
+			Colour colour(255, 0, 0);
+			ModelTriangle triangle(vertices[stoi(l1[0]) - 1], vertices[stoi(l2[0]) - 1], vertices[stoi(l3[0]) - 1], colour);
 			triangle.normal = glm::cross(glm::vec3(vertices[stoi(l2[0]) - 1] - vertices[stoi(l1[0]) - 1]), glm::vec3(vertices[stoi(l3[0]) - 1] - vertices[stoi(l1[0]) - 1]));
 
 			triangles.push_back(triangle);
@@ -627,10 +688,11 @@ void lookAt(glm::vec3 to){
 void orbit() {
 	glm::vec3 origin(0.0, 0.0, 0.0);
 	glm::mat3 camRotation = glm::mat3(
-				cos(0.0174533), 0.0, sin(0.0174533), // first column (not row!)
+				cos(0.005), 0.0, sin(0.005), // first column (not row!)
 				0.0, 1.0, 0.0, // second columns
-				-sin(0.0174533), 0.0, cos(0.0174533) // third coloumn
+				-sin(0.005), 0.0, cos(0.005) // third coloumn
 			);
+			// speed changed by changing from 0.0174533 to 0.005
 			camPosition = camRotation * camPosition;
 			lookAt(origin);
 }
@@ -675,22 +737,28 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 			RayTriangleIntersection shadowResult = getClosestShadowIntersection(result.intersectionPoint, shadowRayDir, triangle, result.triangleIndex);
 			glm::vec3 camDir = glm::normalize(camPosition - result.intersectionPoint);
 			glm::vec3 normal = result.intersectedTriangle.normal;
+			// ambient lighting
 			// proximity lighting
 			float proximity = (5 / (2 * pi * pow(glm::length(shadowRay), 2)));
+
 			// angle of incidences
-			float AOI = glm::clamp(glm::dot(shadowRayDir, normal), 0.0f, 1.0f);
-		  glm::vec3 normalAOI(2 * normal.x * AOI, 2 * normal.y * AOI, 2 * normal.z * AOI);
+			float AOI = pow(glm::clamp(glm::dot(shadowRayDir, normal), 0.0f, 1.0f), 0.1);
+		  //glm::vec3 normalAOI(2 * normal.x * AOI, 2 * normal.y * AOI, 2 * normal.z * AOI);
 			// vector of reflection
-			glm::vec3 Rr = shadowRayDir - normalAOI;
-			float specular = glm::dot(glm::normalize(Rr), glm::normalize(camDir));
-		  float spec = glm::pow(specular, 0);
+			glm::vec3 Rr = shadowRayDir - 2.0f * normal * glm::dot(shadowRayDir, normal);
+			float spec = glm::dot(glm::normalize(Rr), camDir);
+		  float specular = glm::pow(spec, 256);
 			// std::cout << specular;
 			// std::cout << AOI;
 
       // colours of intersecting points
-			float red = glm::clamp((result.intersectedTriangle.colour.red * proximity * AOI * spec), 0.0f, 255.0f);
-			float green = glm::clamp((result.intersectedTriangle.colour.green * proximity * AOI * spec), 0.0f, 255.0f);
-			float blue = glm::clamp((result.intersectedTriangle.colour.blue * proximity * AOI * spec), 0.0f, 255.0f);
+			float red = glm::clamp((result.intersectedTriangle.colour.red * (glm::clamp(float((proximity * AOI) + specular), 0.1f, 1.0f))), 0.0f, 255.0f);
+			float green = glm::clamp((result.intersectedTriangle.colour.green * (glm::clamp(float((proximity * AOI) + specular), 0.1f, 1.0f))), 0.0f, 255.0f);
+			float blue = glm::clamp((result.intersectedTriangle.colour.blue * (glm::clamp(float((proximity * AOI) + specular), 0.1f, 1.0f))), 0.0f, 255.0f);
+
+			float shadowR = result.intersectedTriangle.colour.red;
+			float shadowG = result.intersectedTriangle.colour.green;
+			float shadowB = result.intersectedTriangle.colour.blue;
 
 			if (shadowResult.distanceFromCamera < glm::length(shadowRay)) {
 				/*if (red > 255) {
@@ -703,7 +771,7 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 						blue = 255;
 					}
 					*/
-				window.setPixelColour(i,j,lineColour(0, 0, 0));
+				window.setPixelColour(i,j,lineColour(shadowR * 0.2f, shadowG * 0.2f, shadowB * 0.2f));
 			}
 			else {
 				/* if (red > 255) {
@@ -750,8 +818,10 @@ void drawRasterised(DrawingWindow &window) {
 		orbit();
 	}
   // load in obj and mtl files and calls rasterizeRender to draw it
-  std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
-	rasterizeRender(load, camPosition, focalLength, window);
+  std::vector<ModelTriangle> loadCornell = loadObj("cornell-box.obj", 0.35);
+	  std::vector<ModelTriangle> loadSphere = loadSphereObj("sphere.obj", 0.35);
+
+	rasterizeRender(loadCornell, camPosition, focalLength, window);
 	/*for (size_t y = 0; y < window.height; y++) {
 		//std::vector<glm::vec3> row = interpolateThreeElementValues(left[y], right[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
@@ -764,6 +834,49 @@ void drawRasterised(DrawingWindow &window) {
 		}
 	}
 	*/
+}
+
+
+glm::vec3 getBaryCoord(glm::vec3 point, ModelTriangle triangle, ModelTriangle vecnorms) {
+	glm::vec3 bary;
+	float areaABC = glm::dot(vecnorms.vertices[0], glm::cross((triangle.vertices[1] - triangle.vertices[0]), (triangle.vertices[2] - triangle.vertices[0])));
+	float areaPBC = glm::dot(vecnorms.vertices[0], glm::cross((triangle.vertices[1] - point), (triangle.vertices[2] - point)));
+	float areaPCA = glm::dot(vecnorms.vertices[1], glm::cross((triangle.vertices[2] - point), (triangle.vertices[0] - point)));
+
+	bary.x = areaPBC / areaABC; // alpha
+	bary.y = areaPCA / areaABC; // beta
+	bary.z = 1.0f - bary.x - bary.y; // gamma
+
+	return bary;
+}
+
+void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
+	window.clearPixels();
+
+	depthBuffer.resize(WIDTH);
+  for(int x = 0; x < WIDTH; x++) {
+	  depthBuffer[x].resize(HEIGHT);
+	  for(int y = 0; y < HEIGHT; y++) {
+		  depthBuffer[x][y] = 0.0;
+	  }
+  }
+
+
+	switch (renderMode) 
+	{
+	case WIREFRAME:
+
+		wireFrameRender(triangle, camPosition, focalLength, window);
+		break;
+
+	case RASTERIZED:
+		drawRasterised(window);
+		break;
+
+	case RAYTRACE:
+		drawRayTrace(window, triangle);
+		break;
+	}
 }
 
 
@@ -796,9 +909,9 @@ void keyPressF (DrawingWindow &window) {
 }
 
 void keyPressO (DrawingWindow &window) {
-	std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
-	for (int i = 0; i < load.size(); i++) {
-		std::cout << load[i];
+	std::vector<ModelTriangle> loadCornell = loadObj("cornell-box.obj", 0.35);
+	for (int i = 0; i < loadCornell.size(); i++) {
+		std::cout << loadCornell[i];
 	}
 }
 
@@ -866,7 +979,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		else if (event.key.keysym.sym == SDLK_f) keyPressF(window);
 		else if (event.key.keysym.sym == SDLK_o) keyPressO(window);
 		else if (event.key.keysym.sym == SDLK_r) {
-			window.clearPixels();
+			/* window.clearPixels();
 			depthBuffer.resize(WIDTH);
       for(float x = 0.0; x < WIDTH; x++) {
 	      depthBuffer[x].resize(HEIGHT);
@@ -874,10 +987,11 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		      depthBuffer[x][y] = 0.0;
 	      }
       }  
-			drawRasterised(window);
+			drawRasterised(window); */
+			renderMode = RASTERIZED;
 		}
 		else if (event.key.keysym.sym == SDLK_t) {
-			window.clearPixels();
+			/* window.clearPixels();
 			depthBuffer.resize(WIDTH);
       for(float x = 0.0; x < WIDTH; x++) {
 	      depthBuffer[x].resize(HEIGHT);
@@ -886,10 +1000,11 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 	      }
       }   
 			std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
-			drawRayTrace(window, load);
+			drawRayTrace(window, load); */
+			renderMode = RAYTRACE;
 		}
 		else if (event.key.keysym.sym == SDLK_y) {
-			window.clearPixels();
+			/* window.clearPixels();
 			depthBuffer.resize(WIDTH);
       for(float x = 0.0; x < WIDTH; x++) {
 	      depthBuffer[x].resize(HEIGHT);
@@ -899,24 +1014,31 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
       }   
 			std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
 			wireFrameRender(load, camPosition, focalLength, window);
+			*/
+		  renderMode = WIREFRAME;
 		}
 		else if (event.key.keysym.sym == SDLK_g) {
 			lightSource.x = lightSource.x - 0.1;
+			
 		}
 		else if (event.key.keysym.sym == SDLK_h) {
 			lightSource.x = lightSource.x + 0.1;
+			
 		}
 		else if (event.key.keysym.sym == SDLK_j) {
 			lightSource.z = lightSource.z + 0.1;
-		}
+			
 		else if (event.key.keysym.sym == SDLK_k) {
 			lightSource.z = lightSource.z - 0.1;
+			
 		}
 		else if (event.key.keysym.sym == SDLK_n) {
 			lightSource.y = lightSource.y - 0.1;
+			
 		}
 		else if (event.key.keysym.sym == SDLK_m) {
 			lightSource.y = lightSource.y + 0.1;
+			
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
@@ -996,7 +1118,9 @@ v2.texturePoint.y = 330;
 
 CanvasTriangle triangle(v0,v1,v2);
 
-std::vector<ModelTriangle> load = loadObj("cornell-box.obj", 0.35);
+std::vector<ModelTriangle> loadCornell = loadObj("cornell-box.obj", 0.35);
+std::vector<ModelTriangle> loadSphere = loadSphereObj("sphere.obj", 0.35);
+
 
 Colour colour;
 colour.red = 255;
@@ -1008,7 +1132,8 @@ colour.blue = 255;
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
 		//drawRasterised(window);
-		drawRayTrace(window, load);
+		drawRayTrace(window, loadCornell);
+		//draw(window, loadCornell);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
