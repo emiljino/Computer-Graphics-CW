@@ -83,12 +83,12 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
 	//uint32_t c = (255 << 24) + (int(colour.red) << 16) + (int(colour.green) << 8) + int(colour.blue);
 
 
-	for (float i = 0.0; i<numberOfSteps+1; i++) {
+	for (float i = 0.0; i < numberOfSteps+1; i++) {
 		float x = from.x + (xStepSize * i);
 		float y = from.y + (yStepSize * i);
 		float zDepth = from.depth + (depthStepSize * i);
     //std::cout << zDepth;
-		if (x < 0 || x > WIDTH - 1 || y < 0 || y > HEIGHT - 1) {
+		if (x <= 0 || x > WIDTH - 1 || y <= 0 || y > HEIGHT - 1) {
 			continue;
 		}
     // if inverse of depth is bigger than buffer, add it to buffer
@@ -1019,32 +1019,28 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		}
 		else if (event.key.keysym.sym == SDLK_g) {
 			lightSource.x = lightSource.x - 0.1;
-			
 		}
 		else if (event.key.keysym.sym == SDLK_h) {
 			lightSource.x = lightSource.x + 0.1;
-			
 		}
 		else if (event.key.keysym.sym == SDLK_j) {
 			lightSource.z = lightSource.z + 0.1;
-			
+		}
 		else if (event.key.keysym.sym == SDLK_k) {
 			lightSource.z = lightSource.z - 0.1;
-			
 		}
 		else if (event.key.keysym.sym == SDLK_n) {
 			lightSource.y = lightSource.y - 0.1;
-			
 		}
 		else if (event.key.keysym.sym == SDLK_m) {
 			lightSource.y = lightSource.y + 0.1;
-			
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
 		window.savePPM("output.ppm");
 		window.saveBMP("output.bmp");
 	}
 }
+
 
 int main(int argc, char *argv[]) {
 	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
@@ -1131,8 +1127,8 @@ colour.blue = 255;
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		//drawRasterised(window);
-		drawRayTrace(window, loadCornell);
+		drawRasterised(window);
+		//drawRayTrace(window, loadCornell);
 		//draw(window, loadCornell);
 		//fillMapper(triangle, colour, window);
 	  //textureMapper(triangle, colour, window);
