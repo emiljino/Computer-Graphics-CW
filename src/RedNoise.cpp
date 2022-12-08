@@ -26,7 +26,7 @@ RenderMode renderMode = RASTERIZED;
 
 std::vector<std::vector<float> > depthBuffer;
 glm::vec3 camPosition(0.0, 0.0, 4.0);
-glm::vec3 lightSource(0.0, 0.2, 0.5);
+glm::vec3 lightSource(0.0, 0.5, 0.5);
 glm::mat3 camRotation = glm::mat3(
 				1.0, 0.0, 0.0, // first column (not row!)
 				0.0, 1.0, 0.0, // second column
@@ -40,6 +40,8 @@ glm::mat3 camOrientation = glm::mat3(
 			);
 float focalLength = 2.0;
 bool orbitMode = false;
+
+int rasterizeoutput =  000071;
 
 
 
@@ -88,7 +90,7 @@ void drawLine(CanvasPoint from, CanvasPoint to, Colour colour, DrawingWindow &wi
 		float y = from.y + (yStepSize * i);
 		float zDepth = from.depth + (depthStepSize * i);
     //std::cout << zDepth;
-		if (x <= 0 || x > WIDTH - 1 || y <= 0 || y > HEIGHT - 1) {
+		if (x <= 0 || x > WIDTH-1 || y <= 0 || y > HEIGHT-1) {
 			continue;
 		}
     // if inverse of depth is bigger than buffer, add it to buffer
@@ -459,6 +461,7 @@ std::vector<ModelTriangle> loadSphereObj (std::string objFilepath, float scale) 
 
 
 
+
 /*
 std::vector<ModelTriangle> loadObjAndMtl (std::string mtlFilepath, std::string objFilepath, float scale) {
   // material file path
@@ -745,9 +748,9 @@ void drawRayTrace(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 			float AOI = pow(glm::clamp(glm::dot(shadowRayDir, normal), 0.0f, 1.0f), 0.1);
 		  //glm::vec3 normalAOI(2 * normal.x * AOI, 2 * normal.y * AOI, 2 * normal.z * AOI);
 			// vector of reflection
-			glm::vec3 Rr = shadowRayDir - 2.0f * normal * glm::dot(shadowRayDir, normal);
-			float spec = glm::dot(glm::normalize(Rr), camDir);
-		  float specular = glm::pow(spec, 256);
+			glm::vec3 Rr = shadowRayDir - (2.0f * (normal) * glm::dot(shadowRayDir, normal));
+			float spec = (glm::dot(glm::normalize(Rr), camDir));
+		  float specular = float(glm::pow(spec, 256));
 			// std::cout << specular;
 			// std::cout << AOI;
 
@@ -822,6 +825,11 @@ void drawRasterised(DrawingWindow &window) {
 	  std::vector<ModelTriangle> loadSphere = loadSphereObj("sphere.obj", 0.35);
 
 	rasterizeRender(loadCornell, camPosition, focalLength, window);
+
+	//change output thiny
+	
+
+
 	/*for (size_t y = 0; y < window.height; y++) {
 		//std::vector<glm::vec3> row = interpolateThreeElementValues(left[y], right[y], window.width);
 		for (size_t x = 0; x < window.width; x++) {
@@ -849,6 +857,8 @@ glm::vec3 getBaryCoord(glm::vec3 point, ModelTriangle triangle, ModelTriangle ve
 
 	return bary;
 }
+
+
 
 void draw(DrawingWindow &window, std::vector<ModelTriangle> triangle) {
 	window.clearPixels();
@@ -956,9 +966,9 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 		}
 		else if (event.key.keysym.sym == SDLK_a) {
 			glm::mat3 camRotation = glm::mat3(
-				cos(-0.0174533), 0.0, sin(-0.0174533), // first column (not row!)
+				cos(-0.001), 0.0, sin(-0.001), // first column (not row!)
 				0.0, 1.0, 0.0, // second column
-				-sin(-0.0174533), 0.0, cos(-0.0174533) // third coloumn
+				-sin(-0.001), 0.0, cos(-0.001) // third coloumn
 			);
 			camPosition = camRotation * camPosition;
 			camOrientation = camRotation * camOrientation;
@@ -1036,7 +1046,13 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 			lightSource.y = lightSource.y + 0.1;
 		}
 	} else if (event.type == SDL_MOUSEBUTTONDOWN) {
-		window.savePPM("output.ppm");
+		rasterizeoutput=rasterizeoutput+00001;
+	std::string ext = ".ppm";
+
+	std::string filename= std::to_string(rasterizeoutput) + ext;
+	window.savePPM(filename);
+
+	//	window.savePPM("outputrastorbi10.ppm");
 		window.saveBMP("output.bmp");
 	}
 }
@@ -1123,15 +1139,16 @@ colour.red = 255;
 colour.green = 255;
 colour.blue = 255;
 
+
 	
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		drawRasterised(window);
+		//drawRasterised(window);
 		//drawRayTrace(window, loadCornell);
 		//draw(window, loadCornell);
 		//fillMapper(triangle, colour, window);
-	  //textureMapper(triangle, colour, window);
+	  textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
     //wireFrameRender(load, camPosition, focalLength, window);
 		//rasterizeRender(load, camPosition, focalLength, window);
