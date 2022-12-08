@@ -1145,10 +1145,10 @@ colour.blue = 255;
 		// We MUST poll for events - otherwise the window will freeze !
 		if (window.pollForInputEvents(event)) handleEvent(event, window);
 		//drawRasterised(window);
-		//drawRayTrace(window, loadCornell);
+		drawRayTrace(window, loadSphere);
 		//draw(window, loadCornell);
 		//fillMapper(triangle, colour, window);
-	  textureMapper(triangle, colour, window);
+	  //textureMapper(triangle, colour, window);
 		//loadObj("cornell-box.obj", 0.35);
     //wireFrameRender(load, camPosition, focalLength, window);
 		//rasterizeRender(load, camPosition, focalLength, window);
